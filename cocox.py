@@ -23,6 +23,12 @@ def main():
 
     window = pyglet.window.Window(width=1280, height=720, resizable=False)
     window.set_caption('TimeTableCreator')
+
+    @window.event
+    def on_key_press(symbol, modifiers):
+        if symbol == pyglet.window.key.ESCAPE:
+            return pyglet.event.EVENT_HANDLED
+
     gl.glClearColor(0, 0, 0, 0)
     imgui.create_context()
     load_style()

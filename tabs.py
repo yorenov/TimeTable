@@ -21,11 +21,13 @@ GROUP_LIST = None
 SUBJ_COPY = None
 SUBJ_OLD = None
 
-
 SEARCH_SUBJECT = ""
 SEARCH_AUDIENCE = ""
 SEARCH_TEACHER = ""
 SEARCH_GROUP = ""
+
+SEARCH_TEACHER_ASSOC = ""
+SEARCH_SUBJECT_ASSOC = ""
 
 CURRENT_GROUP = None
 TIME_TABLE = {
@@ -33,6 +35,14 @@ TIME_TABLE = {
     "WEEK": "",
     "YEAR": "",
     "DAYS": {}
+}
+
+ASSOCIATED = {
+    "last_teacher": "",
+    "associated_subjects": [],
+
+    "last_subject": "",
+    "associated_teachers": []
 }
 
 ANOTHER_GROUP_TIME_TABLE = {}
@@ -274,7 +284,7 @@ def TAB_audience(fonts):
 
 def TAB_settings(fonts):
     global SEARCH_SUBJECT, SEARCH_AUDIENCE, SEARCH_TEACHER, SEARCH_GROUP
-    global GROUP_LIST, AUDIENCE_LIST, TEACHER_LIST, SUBJECT_LIST
+    global GROUP_LIST, AUDIENCE_LIST, TEACHER_LIST, SUBJECT_LIST, ASSOCIATED
     imgui.push_font(fonts[22])
     if GROUP_LIST is None or AUDIENCE_LIST is None or TEACHER_LIST is None or SUBJECT_LIST is None:
         updateLists()
@@ -329,13 +339,24 @@ def TAB_settings(fonts):
     imgui.separator()
     for k in SUBJECT_LIST:
         if len(SEARCH_SUBJECT) == 0 or k.lower().find(SEARCH_SUBJECT.lower()) != -1:
-            imgui.button(k, SIZE_CHILD-45)
+            if imgui.button(k + "##SELECT_ASSOCIATED_SUBJECTS", SIZE_CHILD-45):
+                    # "last_subject": "",
+                    # "associated_teachers": []
+                if ASSOCIATED['last_subject'] != k:
+                    ASSOCIATED['last_subject'] = k
+                    ASSOCIATED['associated_teachers'] = [x.teacher for x in db.AssociatedLesson.select().where(db.AssociatedLesson.subject == k)]
+
+                SEARCH_TEACHER = ""
+                imgui.open_popup(ICON_FA.ICON_PLUS + " Преподаватели дисциплины")
             imgui.same_line()
             if imgui.button(ICON_FA.ICON_TRASH_CAN + f"##DELETE_SUBJECT_{k}", 25):
                 db_lesson = db.Lesson.get(db.Lesson.name == k)
                 db_lesson.delete_instance()
+                for assoc in db.AssociatedLesson.select().where(db.AssociatedLesson.subject == k):
+                    assoc.delete_instance()
                 updateLists()
             widgets.hint("Удалить дисциплину")
+    POPUP_associatedTeacher()
     imgui.end_child()
     imgui.same_line()
     imgui.begin_child("settings_teacher_list", SIZE_CHILD, 590, border=True, flags=imgui.WINDOW_NO_SCROLLBAR)
@@ -345,13 +366,22 @@ def TAB_settings(fonts):
     imgui.separator()
     for k in TEACHER_LIST:
         if len(SEARCH_TEACHER) == 0 or k.lower().find(SEARCH_TEACHER.lower()) != -1:
-            imgui.button(k, SIZE_CHILD-45)
+            if imgui.button(k, SIZE_CHILD-45):
+                if ASSOCIATED['last_teacher'] != k:
+                    ASSOCIATED['last_teacher'] = k
+                    ASSOCIATED['associated_subjects'] = [x.subject for x in db.AssociatedLesson.select().where(db.AssociatedLesson.teacher == k)]
+                SEARCH_SUBJECT = ""
+                imgui.open_popup(ICON_FA.ICON_PLUS + " Дисциплины преподаваталей")
             imgui.same_line()
             if imgui.button(ICON_FA.ICON_TRASH_CAN + f"##DELETE_TEACHER_{k}", 25):
                 db_teacher = db.Teacher.get(db.Teacher.name == k)
                 db_teacher.delete_instance()
+
+                for assoc in db.AssociatedLesson.select().where(db.AssociatedLesson.teacher == k):
+                    assoc.delete_instance()
                 updateLists()
             widgets.hint("Удалить преподавателя")
+    POPUP_associatedLessons()
     imgui.end_child()
     imgui.same_line()
     imgui.begin_child("settings_audience_list", SIZE_CHILD, 590, border=True, flags=imgui.WINDOW_NO_SCROLLBAR)
@@ -438,9 +468,23 @@ def draw_table(items, id, draw_tools=False):
                 imgui.close_current_popup()
             imgui.end_popup()
         if imgui.begin_popup(f"edit_subject_text:{id}:{i}"):
+            # "last_teacher": "",
+            # "associated_subjects": [],
+            #
+            # "last_subject": "",
+            # "associated_teachers": []
             item: db.Subject = list(TIME_TABLE['DAYS'].values())[int(id.split(":")[4])][i]
             if SUBJ_OLD is None:
                 SUBJ_OLD = {"time": item.time, "subject": item.subject, "teacher": item.teacher, "audience": item.audience}
+
+            if ASSOCIATED['last_teacher'] != SUBJ_OLD['teacher']:
+                ASSOCIATED['last_teacher'] = SUBJ_OLD['teacher']
+                ASSOCIATED['associated_subjects'] = [x.subject for x in db.AssociatedLesson.select().where(db.AssociatedLesson.teacher == SUBJ_OLD['teacher'])]
+
+            if ASSOCIATED['last_subject'] != SUBJ_OLD['subject']:
+                ASSOCIATED['last_subject'] = SUBJ_OLD['subject']
+                ASSOCIATED['associated_teachers'] = [x.teacher for x in db.AssociatedLesson.select().where(db.AssociatedLesson.subject == SUBJ_OLD['subject'])]
+
             imgui.push_item_width(230)
 
             _, SUBJ_OLD['time'] = imgui.input_text(f"##Время##input_text_edit_subject_text:{id}:{i}", SUBJ_OLD['time'])
@@ -494,19 +538,34 @@ def draw_table(items, id, draw_tools=False):
             if imgui.begin_popup("choose_subject_bind"):
                 imgui.push_item_width(150)
                 _, SEARCH_SUBJECT = imgui.input_text(ICON_FA.ICON_MAGNIFYING_GLASS + "##SEARCH_SUBJECT", SEARCH_SUBJECT)
-                for k in SUBJECT_LIST:
-                    if len(SEARCH_SUBJECT) == 0 or k.find(SEARCH_SUBJECT) != -1:
+                imgui.push_style_color(imgui.COLOR_BUTTON, 0.27, 0.46, 0.27)
+                imgui.push_style_color(imgui.COLOR_BUTTON_ACTIVE, 0.24, 0.43, 0.24)
+                imgui.push_style_color(imgui.COLOR_BUTTON_HOVERED, 0.31, 0.5, 0.31)
+                for k in ASSOCIATED['associated_subjects']:
+                    if len(SEARCH_SUBJECT) == 0 or k.lower().find(SEARCH_SUBJECT.lower()) != -1:
                         if imgui.button(k, 180):
                             SUBJ_OLD['subject'] = k
                             imgui.close_current_popup()
+                imgui.pop_style_color(3)
+                imgui.separator()
+                for k in SUBJECT_LIST:
+                    if len(SEARCH_SUBJECT) == 0 or k.find(SEARCH_SUBJECT) != -1:
+                        if k not in ASSOCIATED['associated_subjects']:
+                            if imgui.button(k, 180):
+                                SUBJ_OLD['subject'] = k
+                                imgui.close_current_popup()
                 imgui.pop_item_width()
                 imgui.end_popup()
 
             if imgui.begin_popup("choose_teacher_bind"):
                 imgui.push_item_width(150)
                 _, SEARCH_TEACHER = imgui.input_text(ICON_FA.ICON_MAGNIFYING_GLASS + "##SEARCH_TEACHER", SEARCH_TEACHER)
-                for k in TEACHER_LIST:
-                    if len(SEARCH_TEACHER) == 0 or k.find(SEARCH_TEACHER) != -1:
+
+                imgui.push_style_color(imgui.COLOR_BUTTON, 0.27, 0.46, 0.27)
+                imgui.push_style_color(imgui.COLOR_BUTTON_ACTIVE, 0.24, 0.43, 0.24)
+                imgui.push_style_color(imgui.COLOR_BUTTON_HOVERED, 0.31, 0.5, 0.31)
+                for k in ASSOCIATED['associated_teachers']:
+                    if len(SEARCH_SUBJECT) == 0 or k.lower().find(SEARCH_SUBJECT.lower()) != -1:
                         teacher_busy = widgets.isTeacherBusy(int(id.split(":")[4]), i, k, ANOTHER_GROUP_TIME_TABLE)
                         if teacher_busy:
                             imgui.push_style_color(imgui.COLOR_TEXT, 0.99, 1, 0.38)
@@ -517,6 +576,22 @@ def draw_table(items, id, draw_tools=False):
                         if teacher_busy:
                             widgets.hint(f"Данный преподаватель уже ведёт '{teacher_busy.subject}' в аудитории '{teacher_busy.audience}' у группы '{teacher_busy.group}'")
                             imgui.pop_style_color(1)
+                imgui.pop_style_color(3)
+                imgui.separator()
+
+                for k in TEACHER_LIST:
+                    if len(SEARCH_TEACHER) == 0 or k.find(SEARCH_TEACHER) != -1:
+                        if k not in ASSOCIATED['associated_teachers']:
+                            teacher_busy = widgets.isTeacherBusy(int(id.split(":")[4]), i, k, ANOTHER_GROUP_TIME_TABLE)
+                            if teacher_busy:
+                                imgui.push_style_color(imgui.COLOR_TEXT, 0.99, 1, 0.38)
+                            icon_btn = (" " + ICON_FA.ICON_TRIANGLE_EXCLAMATION) if teacher_busy else ''
+                            if imgui.button(k + f"{icon_btn}", 180):
+                                SUBJ_OLD['teacher'] = k
+                                imgui.close_current_popup()
+                            if teacher_busy:
+                                widgets.hint(f"Данный преподаватель уже ведёт '{teacher_busy.subject}' в аудитории '{teacher_busy.audience}' у группы '{teacher_busy.group}'")
+                                imgui.pop_style_color(1)
                 imgui.pop_item_width()
                 imgui.end_popup()
 
@@ -542,7 +617,7 @@ def draw_table(items, id, draw_tools=False):
                 imgui.push_style_color(imgui.COLOR_BUTTON, 0.27, 0.46, 0.27)
             else:
                 imgui.push_style_color(imgui.COLOR_BUTTON, 0.46, 0.27, 0.27)
-            if imgui.button(f"{(ICON_FA.ICON_MINUS if HAVE_IMPORTANT_F else ICON_FA.ICON_PLUS)} Разговоры о важном" + "##BTN_IMPORTANT", imgui.get_window_width() - 17):
+            if imgui.button(f"{(ICON_FA.ICON_MINUS if HAVE_IMPORTANT_F else ICON_FA.ICON_PLUS)} Разговор о важном" + "##BTN_IMPORTANT", imgui.get_window_width() - 17):
                 if HAVE_IMPORTANT_F:
                     SUBJ_OLD['subject'] = SUBJ_OLD['subject'][18:]
                 else:
@@ -649,7 +724,7 @@ def clearTimeTable():
 
 
 def updateLists():
-    global GROUP_LIST, AUDIENCE_LIST, TEACHER_LIST, SUBJECT_LIST, ANOTHER_GROUP_TIME_TABLE, TIME_TABLE
+    global GROUP_LIST, AUDIENCE_LIST, TEACHER_LIST, SUBJECT_LIST, ANOTHER_GROUP_TIME_TABLE, TIME_TABLE, ASSOCIATED
     GROUP_LIST = ["Шаблон"]
     AUDIENCE_LIST = []
     TEACHER_LIST = []
@@ -669,6 +744,12 @@ def updateLists():
     for x in db.Audience.select():
         if len(x.name) > 0 and x.name not in AUDIENCE_LIST:
             AUDIENCE_LIST.append(x.name)
+
+    if len(ASSOCIATED['last_teacher']) > 0:
+        ASSOCIATED['associated_subjects'] = [x.subject for x in db.AssociatedLesson.select().where(db.AssociatedLesson.teacher == ASSOCIATED['last_teacher'])]
+
+    if len(ASSOCIATED['last_subject']) > 0:
+        ASSOCIATED['associated_teachers'] = [x.teacher for x in db.AssociatedLesson.select().where(db.AssociatedLesson.subject == ASSOCIATED['last_subject'])]
 
 
 def POPUP_restoreTable():
@@ -768,6 +849,68 @@ def POPUP_addAudiences():
             if imgui.button(ICON_FA.ICON_XMARK + " Отмена##add_audiences_modal", imgui.get_window_width() // 2 - 10):
                 imgui.close_current_popup()
             imgui.pop_item_width()
+    imgui.pop_style_var(1)
+
+
+def POPUP_associatedTeacher():
+    global ASSOCIATED, TEACHER_LIST, SUBJECT_LIST, SEARCH_TEACHER_ASSOC
+    imgui.push_style_var(imgui.STYLE_WINDOW_ROUNDING, 8)
+    with imgui.begin_popup(ICON_FA.ICON_PLUS + " Преподаватели дисциплины", flags=imgui.WINDOW_NO_RESIZE) as popup_modal:
+        if popup_modal.opened:
+            imgui.push_item_width(275)
+            imgui.text(f"Преподаватели '{ASSOCIATED['last_subject']}'")
+            _, SEARCH_TEACHER_ASSOC = imgui.input_text(ICON_FA.ICON_MAGNIFYING_GLASS + "##SEARCH_TEACHER_ASSOCIATED", SEARCH_TEACHER_ASSOC)
+            imgui.separator()
+            with imgui.begin_child("SEARCH_TEACHER_ASSOCIATED", 300, 300, border=True):
+                imgui.push_style_color(imgui.COLOR_BUTTON, 0.27, 0.46, 0.27)
+                imgui.push_style_color(imgui.COLOR_BUTTON_ACTIVE, 0.24, 0.43, 0.24)
+                imgui.push_style_color(imgui.COLOR_BUTTON_HOVERED, 0.31, 0.5, 0.31)
+                for k in ASSOCIATED['associated_teachers']:
+                    if len(SEARCH_TEACHER_ASSOC) == 0 or k.lower().find(SEARCH_TEACHER_ASSOC.lower()) != -1:
+                        if imgui.button(k + "##DELETE_ASSOCIATED_BUTTON", 275):
+                            db_assoc_lesson = db.AssociatedLesson.get(db.AssociatedLesson.teacher == k, db.AssociatedLesson.subject == ASSOCIATED['last_subject'])
+                            db_assoc_lesson.delete_instance()
+                            updateLists()
+                imgui.pop_style_color(3)
+                imgui.separator()
+                for k in TEACHER_LIST:
+                    if k not in ASSOCIATED['associated_teachers']:
+                        if len(SEARCH_TEACHER_ASSOC) == 0 or k.lower().find(SEARCH_TEACHER_ASSOC.lower()) != -1:
+                            if imgui.button(k + "##ADD_ASSOCIATED_BUTTON", 275):
+                                db_assoc_lesson, _ = db.AssociatedLesson.get_or_create(teacher=k, subject=ASSOCIATED['last_subject'])
+                                db_assoc_lesson.save()
+                                updateLists()
+    imgui.pop_style_var(1)
+
+
+def POPUP_associatedLessons():
+    global ASSOCIATED, TEACHER_LIST, SUBJECT_LIST, SEARCH_SUBJECT_ASSOC
+    imgui.push_style_var(imgui.STYLE_WINDOW_ROUNDING, 8)
+    with imgui.begin_popup(ICON_FA.ICON_PLUS + " Дисциплины преподаваталей", flags=imgui.WINDOW_NO_RESIZE) as popup_modal:
+        if popup_modal.opened:
+            imgui.push_item_width(275)
+            imgui.text(f"Дисциплины '{ASSOCIATED['last_teacher']}'")
+            _, SEARCH_SUBJECT_ASSOC = imgui.input_text(ICON_FA.ICON_MAGNIFYING_GLASS + "##SEARCH_SUBJECT_ASSOCIATED", SEARCH_SUBJECT_ASSOC)
+            imgui.separator()
+            with imgui.begin_child("SEARCH_SUBJECT_ASSOCIATED", 300, 300, border=True):
+                imgui.push_style_color(imgui.COLOR_BUTTON, 0.27, 0.46, 0.27)
+                imgui.push_style_color(imgui.COLOR_BUTTON_ACTIVE, 0.24, 0.43, 0.24)
+                imgui.push_style_color(imgui.COLOR_BUTTON_HOVERED, 0.31, 0.5, 0.31)
+                for k in ASSOCIATED['associated_subjects']:
+                    if len(SEARCH_SUBJECT_ASSOC) == 0 or k.lower().find(SEARCH_SUBJECT_ASSOC.lower()) != -1:
+                        if imgui.button(k + "##DELETE_ASSOCIATED_BUTTON", 275):
+                            db_assoc_lesson = db.AssociatedLesson.get(db.AssociatedLesson.subject == k, db.AssociatedLesson.teacher == ASSOCIATED['last_teacher'])
+                            db_assoc_lesson.delete_instance()
+                            updateLists()
+                imgui.pop_style_color(3)
+                imgui.separator()
+                for k in SUBJECT_LIST:
+                    if k not in ASSOCIATED['associated_subjects']:
+                        if len(SEARCH_SUBJECT_ASSOC) == 0 or k.lower().find(SEARCH_SUBJECT_ASSOC.lower()) != -1:
+                            if imgui.button(k + "##ADD_ASSOCIATED_BUTTON", 275):
+                                db_assoc_lesson, _ = db.AssociatedLesson.get_or_create(subject=k, teacher=ASSOCIATED['last_teacher'])
+                                db_assoc_lesson.save()
+                                updateLists()
     imgui.pop_style_var(1)
 
 

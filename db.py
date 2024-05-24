@@ -20,7 +20,7 @@ class BaseModel(Model):
 
 class Group(BaseModel):
     id = AutoField(column_name='id')
-    name = TextField(column_name='', unique=True)
+    name = TextField(column_name='name', unique=True)
 
     class Meta:
         table_name = 'groups'
@@ -28,7 +28,7 @@ class Group(BaseModel):
 
 class Lesson(BaseModel):
     id = AutoField(column_name='id')
-    name = TextField(column_name='', unique=True)
+    name = TextField(column_name='name', unique=True)
 
     class Meta:
         table_name = 'lessons'
@@ -36,7 +36,7 @@ class Lesson(BaseModel):
 
 class Teacher(BaseModel):
     id = AutoField(column_name='id')
-    name = TextField(column_name='', unique=True)
+    name = TextField(column_name='name', unique=True)
 
     class Meta:
         table_name = 'teachers'
@@ -44,7 +44,7 @@ class Teacher(BaseModel):
 
 class Audience(BaseModel):
     id = AutoField(column_name='id')
-    name = TextField(column_name='', unique=True)
+    name = TextField(column_name='name', unique=True)
 
     class Meta:
         table_name = 'audience'
@@ -53,7 +53,7 @@ class Audience(BaseModel):
 class Subject(BaseModel):
     id = AutoField(column_name='id')
 
-    group = TextField(column_name='')
+    group = TextField(column_name='group')
     year = IntegerField(column_name='year', default=0)
     week = IntegerField(column_name='week', default=0)
     day = IntegerField(column_name='day', default=0)
@@ -69,12 +69,23 @@ class Subject(BaseModel):
         table_name = 'subjects'
 
 
+class AssociatedLesson(BaseModel):
+    id = AutoField(column_name='id')
+
+    subject = TextField(column_name='subject')
+    teacher = TextField(column_name='teacher')
+
+    class Meta:
+        table_name = 'AssociatedLesson'
+
+
 conn.connect()
 Subject.create_table()
 Group.create_table()
 Teacher.create_table()
 Audience.create_table()
 Lesson.create_table()
+AssociatedLesson.create_table()
 cursor = conn.cursor()
 
 conn.close()
