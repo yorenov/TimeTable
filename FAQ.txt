@@ -1,0 +1,5 @@
+cocox.py - рабочий для компиляции
+main.py - просто рабочий
+Компилить - pyinstaller --onefile --noconsole cocox.py
+
+by yorenov (Данис Вагизов)
